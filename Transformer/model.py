@@ -13,7 +13,6 @@ class InputEmbeddings(nn.Module):
         self.embedding(x) * math.sqrt(self.d_model)
 
 
-
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, seq_len: int, dropout: float) -> None:
         super().__init__()
@@ -24,4 +23,4 @@ class PositionalEncoding(nn.Module):
         # Matrix of shape (seq_len, d_model)
         pe = torch.zeros(seq_len, d_model)
 
-        # Vector of shape (seq_len, 1).
+        # Vector of shape (seq_len, 1)..
