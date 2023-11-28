@@ -124,7 +124,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, q, k, v, mask):
         query = self.w_q(q) #(Batch, seq_len, d_model) --> (Batch, seq_len, d_model)
-        key = self.w_q(q)
+        key = self.w_k(k)
         value = self.w_v(v)
 
         # Splitting into h heads each matrix
@@ -141,3 +141,39 @@ class MultiHeadAttention(nn.Module):
         return self.w_o(x) 
 
 
+# Add and Norm
+class ResidualConnection(nn.Module):
+
+    def __init__(self, dropout) -> None:
+        super().__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.norm = LayerNormalization()
+    
+    def forward(self, x, sublayer):
+        return x + self.dropout(sublayer(self.norm(x)))
+    
+
+class EncoderBlock(nn.Module):
+
+    def __init__(self, self_attention_block: MultiHeadAttention, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
+        super().__init__() 
+        self.self_attention_block = self_attention_block
+        self.feed_forward_block = feed_forward_block
+        self.residual_connections = nn.ModuleList([ResidualConnection(dropout) for _ in range(2)]) 
+
+    def forward(self, x, src_mask):
+        return self.residual_connections[1](self.residual_connections[0](x,
+                                                                        lambda x: self.self_attention_block(x ,x , x, src_mask)),
+                                            self.feed_forward_block)
+    
+class Encoder(nn.Module):
+
+    def __init__(self, layers: nn.ModuleList) -> None:
+        super().__init__()
+        self.layers = layers
+        self.normalization = LayerNormalization()
+    
+    def forward(self, x, mask):
+        for layer in self.layers:
+            x = layer(x)
+        return self.norm(x)
