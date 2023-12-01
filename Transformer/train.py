@@ -6,3 +6,8 @@ from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
+
+from pathlib import Path
+
+
+def get_or_build_tokinizer(config, ds, land)
