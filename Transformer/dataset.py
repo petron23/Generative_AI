@@ -78,6 +78,7 @@ class BilingualDataset(Dataset):
         }
 
 
+# This sets the mask true below the diagonal
 def causal_mask(size):
     mask = torch.triu(torch.ones(1, size, size), diagonal =1).type(torch.int)
     return mask == 0
