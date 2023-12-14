@@ -10,6 +10,11 @@ from tokenizers.pre_tokenizers import Whitespace
 
 from model import build_transformer
 from dataset import BilingualDataset, causal_mask
+from tqdm import tqdm
+
+from config import get_weights_file_path, get_config
+
+from torch.utils.tensorboard import SummaryWriter
 
 from pathlib import Path
 
@@ -65,7 +70,7 @@ def get_ds(config):
 
 def get_model(config, vocab_src_len, vocab_tgt_len):
     model = build_transformer(src_vocab_size=vocab_src_len, tgt_vocab_size=vocab_tgt_len, src_seq_len=config["seq_len"], tgt_seq_len=config["seq_len"], d_model=config["d_model"])
-    return 
+    return model
 
 def train_model(config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -73,8 +78,49 @@ def train_model(config):
 
     Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, src_tokenizer, tgt_tokenizer = get_ds(config=config)
-    model = get_model(config=config, vocab_src_len=src_tokenizer.get_vocab_size(), vocab_tgt_len=tgt_tokenizer.get_vocab_size()).to(device)
+    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds(config=config)
+    model = get_model(config=config, vocab_src_len=tokenizer_src.get_vocab_size(), vocab_tgt_len=tokenizer_tgt.get_vocab_size()).to(device)
     
     # Logging via Tensorboard
-    
+    writer = SummaryWriter(config["experiment_name"])
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"],eps=1e-9)
+
+    initial_epoch = 0
+    global_step = 0
+
+    if config["preload"]:
+        model_filename = get_weights_file_path(config, config["preload"] )
+        print(f"Preloading model {model_filename}")
+        state = torch.laod(model_filename)
+        initial_epoch = state["epoch"] + 1
+        optimizer.load_state_dict(state['optimizer_state_dict'])
+        global_step = state['global_step']
+
+    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id("[PAD]"), label_smoothing = 0.1).to(device)
+
+    for epoch in range(initial_epoch, config["num_epochs"]):
+        model.train()
+        batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
+        for batch in batch_iterator:
+
+            encoder_input = batch["encoder_input"].to(device) # (batch, seq_len)
+            decoder_input = batch["decoder_input"].to(device) # (batch, seq_len)
+            encoder_mask  = batch["encoder_mask"].to(device)  # (batch,1,1, seq_len), this only masks the SOS and EOS
+            decoder_mask = batch["decoder_input"].to(device)  # (batch,1, seq_len, seq_len), this maps EOS and all the subsequent words after the sequence
+            
+            # flow the tensors through the transformer
+            encoder_output = model.encoder(encoder_input, encoder_mask) # (batch, seq_len, d_model)
+            decoder_output = model.decoder(encoder_input, encoder_mask, decoder_input, decoder_mask) # (batch, seq_len, d_model)
+
+            proj_output = model.project(decoder_output) # (batch, seq_len, tgt_vocab_size)
+            
+            label = batch["label"].to(device)
+            
+            # (batch, seq_len, tgt_vocab_size) -> (batch * seq_len, tgt_vocab_size)
+            loss = loss_fn(proj_output.view(-1, tokenizer_tgt.get_vocab_size()), label.view(-1) )
+            
+
+
+
+

@@ -14,7 +14,7 @@ def get_config():
            "tokenizer_file":"tokeinzer_{0}.josn",
            "experiment_name":"runs/tmodel"}
 
-def get_model_file_path(config, epoch: str):
+def get_weights_file_path(config, epoch: str):
     model_folder = config["model_folder"] 
     model_basename = config["model_filename"]
     model_filename = f'{model_basename}{epoch}.pt'
