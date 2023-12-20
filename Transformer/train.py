@@ -10,6 +10,7 @@ from tokenizers.pre_tokenizers import Whitespace
 
 from model import build_transformer
 from dataset import BilingualDataset, causal_mask
+import warnings
 from tqdm import tqdm
 
 from config import get_weights_file_path, get_config
@@ -24,7 +25,7 @@ def get_all_sentences(ds, lang):
 
 
 def get_or_build_tokinizer(config, ds, lang):
-    tokenizer_path = Path(config["tokinizer_file"].format(lang))
+    tokenizer_path = Path(config["tokenizer_file"].format(lang))
     if not Path.exists(tokenizer_path):
         tokenizer = Tokenizer(WordLevel(unk_token= "[UNK]"))
         tokenizer.pre_tokenizer = Whitespace()
@@ -76,7 +77,7 @@ def train_model(config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"The device is {device}")
 
-    Path(config["model_folder"]).mkdir(parents=True, exist_ok=True)
+    Path(f"{config['model_folder']}").mkdir(parents=True, exist_ok=True)
 
     train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds(config=config)
     model = get_model(config=config, vocab_src_len=tokenizer_src.get_vocab_size(), vocab_tgt_len=tokenizer_tgt.get_vocab_size()).to(device)
@@ -121,6 +122,32 @@ def train_model(config):
             loss = loss_fn(proj_output.view(-1, tokenizer_tgt.get_vocab_size()), label.view(-1) )
             batch_iterator.set_postfix({f"loss": f"{loss.item():6.3f}"} )
             
+            # Log the loss
+            writer.add_scalar("train loss", loss.item(), )
+
+            # Backpropagation
+            loss.backward()
+
+            # Update the weights
+            optimizer.step()
+            optimizer.zero_grad()
+
+            global_step +=1
+            
+    # Save the model at the end of each epoch
+    model_filename = get_weights_file_path(config, f'{epoch:02d}')
+    torch.save({
+
+        "epoch": epoch,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "global_step": global_step
+    }, model_filename)
+
+if __name__ == "__main__":
+    warnings.filterwarnings('ignore')
+    config = get_config()
+    train_model(config)
 
 
 
