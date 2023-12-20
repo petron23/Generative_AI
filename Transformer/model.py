@@ -23,7 +23,7 @@ class PositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         # Matrix of shape (seq_len, d_model)
-        self.pe = torch.zeros(seq_len, d_model)
+        pe = torch.zeros(seq_len, d_model)
 
         # Vector of shape (seq_len, 1)
         position = torch.arange(0, seq_len, dtype=torch.float).unsqueeze(1)
@@ -31,16 +31,16 @@ class PositionalEncoding(nn.Module):
         #div_term = torch.exp((torch.log(10000.**(-torch.arange(0,64,2).float() / 64))))
 
         # Giving values to the positional encoding matrix
-        self.pe[:, 0::2] = torch.sin(position * div_term)
-        self.pe[:, 1::2] = torch.cos(position * div_term)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
 
 
         # Adding another dimension to the pe matrix as we will use batches
-        self.pe = self.pe.unsqueeze(0) #(1, seq_len, d_model)
+        pe = pe.unsqueeze(0) #(1, seq_len, d_model)
 
         # Register the tensor in the buffer of the model, we want this to be saved not as a learned param
         # I.e., it is saved in the file along with the model
-        self.register_buffer("pe", self.pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
         x = x + (self.pe[:,:x.shape[1],:]).requires_grad_(False)
@@ -185,8 +185,8 @@ class DecoderBlock(nn.Module):
                  feed_forward_block: FeedForwardBlock, dropout: float ) -> None:
         super().__init__()
         self.self_attention_block = self_attention_block
-        self.cross_attention_block = self.cross_attention_block
-        self.feed_forward_block = self.feed_forward_block
+        self.cross_attention_block = cross_attention_block
+        self.feed_forward_block = feed_forward_block
         self.residual_connections = nn.ModuleList([ResidualConnection(dropout) for _ in range(3)])
 
     def forward(self, x, encoder_output, src_mask, tgt_mask):
