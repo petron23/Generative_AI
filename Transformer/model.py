@@ -103,17 +103,16 @@ class MultiHeadAttention(nn.Module):
         assert self.d_model % self.h == 0, "d_model must be divisble by h"
 
         self.d_k = self.d_model // h
-        self.w_q = nn.Linear(d_model, d_model)
-        self.w_k = nn.Linear(d_model, d_model)
-        self.w_v = nn.Linear(d_model, d_model)
+        self.w_q = nn.Linear(d_model, d_model, bias=False)
+        self.w_k = nn.Linear(d_model, d_model, bias=False)
+        self.w_v = nn.Linear(d_model, d_model, bias=False)
 
-        self.w_o = nn.Linear(d_model, d_model)
+        self.w_o = nn.Linear(d_model, d_model, bias=False)
         self.dropout = nn.Dropout(dropout)
 
     @staticmethod
     def attention(query, key, value, mask, dropout: nn.Dropout):
-        d_k = value.shape[-1]
-        
+        d_k = query.shape[-1]
 
         attention_scores = (query @ key.transpose(-2,-1))/math.sqrt(d_k)
         if mask is not None:
@@ -192,13 +191,20 @@ class DecoderBlock(nn.Module):
         self.residual_connections = nn.ModuleList([ResidualConnection(dropout) for _ in range(3)])
 
     def forward(self, x, encoder_output, src_mask, tgt_mask):
-        x = self.residual_connections[2](
-                self.residual_connections[1](
-                    self.residual_connections[0](
-                        x, self.self_attention_block(x, x, x, tgt_mask)),
-                    self.cross_attention_block(x,encoder_output, encoder_output, src_mask)),
-                self.feed_forward_block) 
+        x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, tgt_mask))
+        x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x, encoder_output, encoder_output, src_mask))
+        x = self.residual_connections[2](x, self.feed_forward_block)
         return x
+
+
+
+        #x = self.residual_connections[2](
+        #        self.residual_connections[1](
+        #            self.residual_connections[0](
+        #                x, self.self_attention_block(x, x, x, tgt_mask)),
+        #            self.cross_attention_block(x,encoder_output, encoder_output, src_mask)),
+        #        self.feed_forward_block) 
+        #return x
     
 
 class Decoder(nn.Module):
@@ -208,7 +214,7 @@ class Decoder(nn.Module):
         self.layers = layers
         self.norm = LayerNormalization
     
-    def forward(self, encoder_output, src_mask, tgt_mask):
+    def forward(self, x, encoder_output, src_mask, tgt_mask):
         for layer in self.layers:
             x = layer(x, encoder_output, src_mask, tgt_mask)
         return self.norm(x)
