@@ -2,6 +2,7 @@ import torch
 import torch.nn as  nn
 import math
 
+
 class InputEmbeddings(nn.Module):
     
     def __init__(self, d_model: int, vocab_size: int):
@@ -11,7 +12,7 @@ class InputEmbeddings(nn.Module):
         self.embedding = nn.Embedding(vocab_size, d_model)
 
     def forward(self, x):
-        self.embedding(x) * math.sqrt(self.d_model)
+        return self.embedding(x) * math.sqrt(self.d_model)
 
 
 class PositionalEncoding(nn.Module):
@@ -56,6 +57,7 @@ class LayerNormalization(nn.Module):
         self.bias = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
+        x = x.float()
         mean = x.mean(dim=-1, keepdim=True)
         std = x.std(dim=-1, keepdim=True)
         return self.alpha * (x-mean)/(std + self.eps) + self.bias
@@ -105,7 +107,7 @@ class MultiHeadAttention(nn.Module):
         self.w_k = nn.Linear(d_model, d_model)
         self.w_v = nn.Linear(d_model, d_model)
 
-        self.w_0 = nn.Linear(d_model, d_model)
+        self.w_o = nn.Linear(d_model, d_model)
         self.dropout = nn.Dropout(dropout)
 
     @staticmethod
@@ -113,7 +115,7 @@ class MultiHeadAttention(nn.Module):
         d_k = value.shape[-1]
         
 
-        attention_scores = (query @ key.transpos(-2,-1))/math.sqrt(d_k)
+        attention_scores = (query @ key.transpose(-2,-1))/math.sqrt(d_k)
         if mask is not None:
             attention_scores.masked_fill(mask == 0, 10**-9)
         attention_scores = attention_scores.softmax(dim=-1)
@@ -135,7 +137,7 @@ class MultiHeadAttention(nn.Module):
         x, self.attention_scores = MultiHeadAttention.attention(query, key, value, mask, self.dropout)
 
         # (Batch, seq_len, d_k) --> (Batch, seq_len, d_model = d_k * h)
-        x = x.transpose(1,2).contigous().view(x.shape[0], -1, self.d_k * self.h)
+        x = x.transpose(1,2).contiguous().view(x.shape[0], -1, self.d_k * self.h)
 
         # (Batch, seq_len, d_model)
         return self.w_o(x) 
@@ -176,7 +178,7 @@ class Encoder(nn.Module):
     def forward(self, x, mask):
         for layer in self.layers:
             x = layer(x, mask)
-        return self.norm(x)
+        return self.normalization(x)
     
 
 class DecoderBlock(nn.Module):
@@ -243,7 +245,7 @@ class Transformer(nn.Module):
 
     def encode(self, src, src_mask):
         return self.encoder(self.src_position(self.src_embedding(src)), src_mask)
-    
+
     def decode(self, encoder_output, src_mask, tgt, tgt_mask):
         return self.decoder(self.tgt_position(self.tgt_embedding(tgt)), encoder_output, src_mask, tgt_mask) 
 

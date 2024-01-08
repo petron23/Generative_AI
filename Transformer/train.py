@@ -24,7 +24,7 @@ def get_all_sentences(ds, lang):
         yield item["translation"][lang]
 
 
-def get_or_build_tokinizer(config, ds, lang):
+def get_or_build_tokenizer(config, ds, lang):
     tokenizer_path = Path(config["tokenizer_file"].format(lang))
     if not Path.exists(tokenizer_path):
         tokenizer = Tokenizer(WordLevel(unk_token= "[UNK]"))
@@ -35,12 +35,13 @@ def get_or_build_tokinizer(config, ds, lang):
         tokenizer = Tokenizer.from_file(str(tokenizer_path))
     return tokenizer
 
+
 def get_ds(config):
     ds_raw = load_dataset("opus_books", f'{config["lang_src"]}-{config["lang_tgt"]}', split = "train")
 
     # Build tokenizer
-    tokenizer_src = get_or_build_tokinizer(config, ds_raw, config["lang_src"])
-    tokenizer_tgt = get_or_build_tokinizer(config, ds_raw, config["lang_tgt"])
+    tokenizer_src = get_or_build_tokenizer(config, ds_raw, config["lang_src"])
+    tokenizer_tgt = get_or_build_tokenizer(config, ds_raw, config["lang_tgt"])
 
     # 90-10 split
     train_ds_size = int(0.9*len(ds_raw))
@@ -111,8 +112,8 @@ def train_model(config):
             decoder_mask = batch["decoder_input"].to(device)  # (batch,1, seq_len, seq_len), this maps EOS and all the subsequent words after the sequence
             
             # flow the tensors through the transformer
-            encoder_output = model.encoder(encoder_input, encoder_mask) # (batch, seq_len, d_model)
-            decoder_output = model.decoder(encoder_input, encoder_mask, decoder_input, decoder_mask) # (batch, seq_len, d_model)
+            encoder_output = model.encode(encoder_input, encoder_mask) # (batch, seq_len, d_model)
+            decoder_output = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask) # (batch, seq_len, d_model)
 
             proj_output = model.project(decoder_output) # (batch, seq_len, tgt_vocab_size)
             
